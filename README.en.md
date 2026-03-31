@@ -4,6 +4,8 @@ English | [中文](README.md)
 
 Unified DiDi mobility entry point — handles all transportation needs with full ride-hailing and route planning capabilities.
 
+**ClawHub**: [didi-ride-skill-official](https://clawhub.ai/didi/didi-ride-skill-official)
+
 > **Service Area**: Covers all cities in **Mainland China** served by DiDi. Not available in Hong Kong, Macau, Taiwan, or outside China.
 
 ## Table of Contents

@@ -4,6 +4,8 @@
 
 【滴滴出行统一入口】处理用户所有出行相关需求，提供完整的打车服务和路线规划功能。
 
+**ClawHub**: [didi-ride-skill-official](https://clawhub.ai/didi/didi-ride-skill-official)
+
 > **服务范围**：支持滴滴出行服务覆盖的中国大陆城市。
 
 ## 目录
