@@ -1,0 +1,15 @@
+{
+  "name": "didi-ride-skill",
+  "version": "1.1.0",
+  "description": "DiDi Ride Skill for OpenClaw - 打车、路线规划、周边搜索",
+  "type": "module",
+  "author": "DiDi MCP Team",
+  "homepage": "https://mcp.didichuxing.com",
+  "keywords": [
+    "didi",
+    "taxi",
+    "mcp",
+    "openclaw",
+    "mobility"
+  ]
+}
