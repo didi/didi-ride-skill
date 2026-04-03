@@ -1,6 +1,6 @@
 {
   "name": "didi-ride-skill",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "DiDi Ride Skill for OpenClaw - 打车、路线规划、周边搜索",
   "type": "module",
   "author": "DiDi MCP Team",
