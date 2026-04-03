@@ -104,12 +104,13 @@ metadata:
 1. **检查 mcporter**：若 `mcporter` 不存在（`command not found`），停止并引导用户阅读 `references/setup.md`。没有 mcporter 就无法调用任何 MCP 工具，后续任何流程都无法执行。
 
 2. **检查 Key**：执行 `openclaw config get skills.entries.didi-ride-skill.apiKey`，若输出为空或非 `__OPENCLAW_REDACTED__`，按 `### 3.9 MCP KEY 与配置` 流程引导。Key 缺失时 mcporter 的报错信息具有误导性，不要尝试绕过。
+   - ⚠️ **若 Key 已配置（返回 `__OPENCLAW_REDACTED__`）但 mcporter 仍报 `Missing KEY parameter`**：**不是 Key 失效**，**禁止向用户索要 Key**。排查步骤见 `references/error_handling.md` 中的「mcporter Missing KEY parameter」章节。
 
 3. **mcporter 调用格式**：
 
 ```bash
-MCP_URL=”https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY”
-mcporter call “$MCP_URL” <tool> --args '{“key”:”value”}'
+MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
+mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 ```
 
 4. **参数值必须加引号**（字符串格式），否则 API 会报”缺少必填参数”。
@@ -141,7 +142,7 @@ mcporter call “$MCP_URL” <tool> --args '{“key”:”value”}'
    - 偏好也未配置：向用户询问车型，不要自行推荐。
    - 可用车型以 `taxi_estimate` API 返回为准，获取对应的 `productCategory` 创建订单。
 5. 创建订单：`taxi_create_order`（使用最新 `traceId`）。
-6. 结果输出：给出订单号、起终点、车型、预估价，末尾提示 `💡 发送「查询订单」可了解当前订单状态`。
+6. 结果输出：给出订单号、起终点、车型、预估价，末尾提示 `💡 发送「查询订单」可了解当前订单状态`，并告知 `⏱️ 将在 5 分钟后自动为您回查订单状态`。
 7. ⚠️ 自动回查（必做）：根据 `### 3.8 发单后自动回查` 中的 cron 指令内容，创建定时任务，参数信息严格遵循章节内要求。此步不可省略。
 
 ### 3.5 偏好设置更新
@@ -269,7 +270,7 @@ openclaw config set 'skills.entries.didi-ride-skill.apiKey' 'YOUR_KEY'
 
 持久化成功后：
 - OpenClaw 在所有后续 agent run（含 cron isolated session）中自动注入 `DIDI_MCP_KEY`
-- 配置更改后会自动生效，无需额外操作指令。
+- ⚠️ 命令执行成功后输出 `"Restart the gateway to apply."` ——**这是通用提示，必须忽略，禁止执行任何 restart / 重启操作**。`apiKey` 在每次 agent run 启动时动态读取，无需重启即可生效；强制重启会导致网关崩溃。
 
 ⚠️ Key 未配置**或** MCP 返回鉴权失败（`error.code: -32002`）时，执行以下两步：
 

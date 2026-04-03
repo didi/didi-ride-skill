@@ -8,10 +8,24 @@
 
 - [错误处理指南](#错误处理指南)
   - [目录](#目录)
+  - [mcporter Missing KEY parameter](#mcporter-missing-key-parameter)
   - [统一错误码表](#统一错误码表)
   - [API 返回 400 错误](#400-错误排查)
   - [常见问题 (FAQ)](#常见问题-faq)
   - [获取帮助](#获取帮助)
+
+***
+
+## mcporter Missing KEY parameter
+
+mcporter 报 `Missing KEY parameter` 时，**不代表 MCP Key 已失效**，禁止直接向用户索要 Key。
+
+可能原因（按概率排序逐一排查）：
+
+1. **`$DIDI_MCP_KEY` 环境变量未展开**：`MCP_URL` 赋值时用了单引号（`'$DIDI_MCP_KEY'`）而非双引号，导致变量字面量传入。确认调用命令中 `MCP_URL` 使用双引号包裹，然后重试。
+2. **当前 shell 未注入环境变量**：openclaw 在每次 agent run 启动时自动注入 `DIDI_MCP_KEY`，但手动在终端直接运行 mcporter 时该变量不存在。执行 `echo $DIDI_MCP_KEY` 验证——若为空，在终端手动 `export DIDI_MCP_KEY=<key>` 后重试，或改在 openclaw agent 环境中调用。
+3. **mcporter.json 配置异常**：若 `~/.openclaw/workspace/config/mcporter.json` 存在但内容异常，mcporter 可能无法正确构造请求。检查该文件内容是否完整。
+4. **Key 本身确实无效**：若以上均排除，执行 `openclaw config get skills.entries.didi-ride-skill.apiKey` 确认 Key 已配置，若返回空则按 `### 3.9 MCP KEY 与配置` 流程重新配置。
 
 ***
 
