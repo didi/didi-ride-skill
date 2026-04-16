@@ -7,8 +7,6 @@ Unified DiDi mobility entry point — handles all transportation needs with full
 **ClawHub**: [didi-ride-skill-official](https://clawhub.ai/didi/didi-ride-skill-official)
 
 > **Service Area**: Covers all cities in **Mainland China** served by DiDi. Not available in Hong Kong, Macau, Taiwan, or outside China.
->
-> **Subscription Tiers**: DiDi MCP has two tiers — **Beta** (default) and **Pro**. Keys obtained via QR code or the official site are Beta by default, with free access to all map/route tools (`maps_*`). **Ride-hailing tools (`taxi_create_order`, `taxi_query_order`, `taxi_cancel_order`, `taxi_get_driver_location`) are Pro-only.** Enable passwordless payment on the [DiDi MCP Console](https://mcp.didichuxing.com) to upgrade to Pro automatically.
 
 ## Table of Contents
 
@@ -133,15 +131,10 @@ Edit `~/.openclaw/openclaw.json`:
 # Check that the key is set
 echo $DIDI_MCP_KEY
 
-# List all available tools and their signatures (verifies key + connectivity)
+# Test API connectivity
 export MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
-mcporter list "$MCP_URL"
-
-# Test map lookup (available for both Beta and Pro)
 mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"Xierqi Subway Station","city":"北京市"}'
 ```
-
-> 💡 **Testing ride dispatch**: To verify that ride-hailing works, call `taxi_create_order`. If it returns `Streamable HTTP error: Unexpected content type: text/plain`, your key is Beta (no API dispatch permission); upgrade to Pro on the official console.
 
 ---
 
@@ -149,26 +142,26 @@ mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"Xierqi Subway Stat
 
 ### Ride-Hailing
 
-| Tool | Purpose | Tier |
-|------|---------|------|
-| `maps_textsearch` | Text-based address lookup, returns coordinates | All users |
-| `maps_regeocode` | Reverse geocoding (coordinates → address) | All users |
-| `taxi_estimate` | Price estimate across available vehicle types | Beta partial (no price fields) / Pro full |
-| `taxi_create_order` | Create a ride order | **Pro only** |
-| `taxi_query_order` | Query order status and driver info | **Pro only** |
-| `taxi_get_driver_location` | Get driver's real-time location | **Pro only** |
-| `taxi_cancel_order` | Cancel an order | **Pro only** |
-| `taxi_generate_ride_app_link` | Generate deep link to DiDi App (fallback when direct API dispatch is unavailable) | All users |
+| Tool | Purpose |
+|------|---------|
+| `maps_textsearch` | Text-based address lookup, returns coordinates |
+| `taxi_estimate` | Price estimate across available vehicle types |
+| `taxi_create_order` | Create a ride order |
+| `taxi_query_order` | Query order status and driver info |
+| `taxi_get_driver_location` | Get driver's real-time location |
+| `maps_regeocode` | Reverse geocoding (coordinates → address) |
+| `taxi_cancel_order` | Cancel an order |
+| `taxi_generate_ride_app_link` | Generate deep link to DiDi App (fallback when direct API dispatch is unavailable) |
 
 ### Route Planning
 
-| Tool | Purpose | Tier |
-|------|---------|------|
-| `maps_direction_driving` | Driving route planning | All users |
-| `maps_direction_transit` | Bus/subway route planning | All users |
-| `maps_direction_walking` | Walking route planning | All users |
-| `maps_direction_bicycling` | Cycling route planning | All users |
-| `maps_place_around` | Nearby search | All users |
+| Tool | Purpose |
+|------|---------|
+| `maps_direction_driving` | Driving route planning |
+| `maps_direction_transit` | Bus/subway route planning |
+| `maps_direction_walking` | Walking route planning |
+| `maps_direction_bicycling` | Cycling route planning |
+| `maps_place_around` | Nearby search |
 
 ---
 
