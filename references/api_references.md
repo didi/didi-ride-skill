@@ -1,14 +1,5 @@
 # API 文档
 
-## 接口权限分级
-
-DiDi MCP 官方文档将接口分为两档权限（以官网 https://mcp.didichuxing.com/api?tap=api 为准）：
-
-- **全部用户可用**：`maps_textsearch`、`maps_regeocode`、`maps_place_around`、`maps_direction_driving`、`maps_direction_transit`、`maps_direction_walking`、`maps_direction_bicycling`
-- **仅 Pro 可用**：`taxi_estimate`、`taxi_create_order`、`taxi_query_order`、`taxi_cancel_order`、`taxi_get_driver_location`、`taxi_generate_ride_app_link`
-
-Beta 用户调用 Pro 接口时返回 `Streamable HTTP error: Unexpected content type: text/plain`（`taxi_estimate` 与 `taxi_generate_ride_app_link` 行为略有差异——会返回部分可用数据）。识别与处理见 `error_handling.md` 的「Beta 版本用户识别」章节。
-
 ## 响应格式说明
 
 所有工具均返回 `content[].text`（自然语言文本）。部分工具（网约车类）额外返回 `structuredContent`（结构化数据）。

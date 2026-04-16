@@ -8,7 +8,6 @@
 4. `taxi_create_order` 必须使用最近一次预估返回的 `traceId`。
 5. 起终点缺失时按优先级补全：① 读 assets/PREFERENCE.md，有地址别名且值非空则推断；② 无可用别名时询问用户当前位置，不得用历史记忆补齐。
 6. 用户拒绝提供当前位置时固定回复：不提供当前位置信息则无法满足您的需求。
-7. mcporter 使用 URL 直连模式，**禁止添加 `--server` 标志**，**禁止创建或修改 `config/mcporter.json`**。遇到 `StatusCode=400` 先核对参数名（见 SKILL.md §3.2 第 4 条），遇到 JSON 校验错误用 `--config` 绕过（见 SKILL.md §3.2 第 3 条）。
 
 ## Phase 1：地址解析
 
@@ -26,8 +25,8 @@ mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"北京西站","cit
 解析规则：
 
 - 用户给完整起终点：直接进入预估。
-- "我要上班/下班了"：允许按家↔公司偏好直接解析。
-- "回家/去公司"但缺起点：先问当前位置。
+- “我要上班/下班了”：允许按家↔公司偏好直接解析。
+- “回家/去公司”但缺起点：先问当前位置。
 
 ## Phase 2：价格预估
 
@@ -56,7 +55,7 @@ mcporter call "$MCP_URL" taxi_create_order --args '{"estimate_trace_id":"TRACE_I
 - 用户明确车型时按用户选择发单。
 - 用户未明确车型时，可按偏好车型直发；偏好也未配置时，须向用户询问车型，不要自行推荐。
 - 若缺少 `estimate_trace_id` 或 `product_category`，禁止发单。
-- ⚠️ **Beta 版本检测（必做）**：若返回 `Streamable HTTP error: Unexpected content type: text/plain`，立即停止流程，按 `error_handling.md` 的「Beta 版本用户识别」章节输出固定文案（不要重试、不要切换 Key、不要继续后续步骤）。
+- 若返回 `Streamable HTTP error: Unexpected content type: text/plain`，按 `error_handling.md` 的「taxi_create_order 调用失败」章节处理（停止流程并输出固定文案，不要重试）。
 
 成功输出模板：
 
@@ -71,7 +70,6 @@ mcporter call "$MCP_URL" taxi_create_order --args '{"estimate_trace_id":"TRACE_I
 
 ⏳ 正在为您匹配司机...
 💡 发送「查询订单」可了解当前订单状态
-⏱️ 将在 5 分钟后自动为您回查订单状态
 ```
 
 ## Phase 4：查询订单
@@ -82,7 +80,7 @@ mcporter call "$MCP_URL" taxi_create_order --args '{"estimate_trace_id":"TRACE_I
 
 ```bash
 # MCP_URL 沿用 Phase 1 已定义的变量
-mcporter call "$MCP_URL" taxi_query_order --args '{"order_id":"ORDER_ID"}'
+mcporter call “$MCP_URL” taxi_query_order --args '{“order_id”:”ORDER_ID”}'
 ```
 
 ### 状态码与输出格式
@@ -106,29 +104,27 @@ mcporter call "$MCP_URL" taxi_query_order --args '{"order_id":"ORDER_ID"}'
 2. 用户确认后调用 `taxi_cancel_order`；
 3. 调用 `taxi_query_order` 确认取消结果。
 
-> ⚠️ `taxi_cancel_order` 和 `taxi_query_order` 均为 Pro 接口，Beta 用户调用会返回 `Streamable HTTP error`，处理方式见 `error_handling.md` 的「Beta 版本用户识别」。
-
 ## Phase 6：预约出行（cron 托管）
 
 说明：MCP API 是实时发单，预约由 OpenClaw cron 托管叫车需求，到点由 isolated agent 独立执行完整打车流程。
 
 ```bash
 # ⚠️ 替换占位符：
-#   FROM_NAME    → 带城市前缀的起点全称（如"北京市西二旗地铁站"）
-#   TO_NAME      → 带城市前缀的终点全称（如"北京市佰嘉城小区"）
-#   VEHICLE      → 车型（如"快车"）
+#   FROM_NAME    → 带城市前缀的起点全称（如”北京市西二旗地铁站”）
+#   TO_NAME      → 带城市前缀的终点全称（如”北京市佰嘉城小区”）
+#   VEHICLE      → 车型（如”快车”）
 #   TIME         → 见下方时间规则
-#   CHANNEL_NAME → 当前会话 metadata 中的 channel 字段（如 feishu、telegram），CHANNEL_NAME 不需要带引号，例如: feishu ✅, "feishu" ❌。不允许使用 last 作为参数值。
+#   CHANNEL_NAME → 当前会话 metadata 中的 channel 字段（如 feishu、telegram），CHANNEL_NAME 不需要带引号，例如: feishu ✅, “feishu” ❌。不允许使用 last 作为参数值。
 #   CHAT_ID      → 当前会话 metadata 中的 chat_id 字段
 
 openclaw cron add \
-  --name "didi-ride-skill:$(date +%s)" \
-  --at "TIME" \
+  --name “didi-ride-skill:$(date +%s)” \
+  --at “TIME” \
   --session isolated \
-  --message "执行定时打车：起点「FROM_NAME」，终点「TO_NAME」，车型「VEHICLE」。请完整执行打车流程：地址解析 → 价格预估（获取最新 traceId）→ 创建订单。订单创建成功后，输出订单信息并提示用户可发送「查询订单」了解订单状态，同时创建 5 分钟后自动回查 cron（模板见 SKILL.md 第 3.8 节「发单后自动回查」）。" \
+  --message “执行定时打车：起点「FROM_NAME」，终点「TO_NAME」，车型「VEHICLE」。请完整执行打车流程：地址解析 → 价格预估（获取最新 traceId）→ 创建订单。订单创建成功后，输出订单信息并提示用户可发送「查询订单」了解订单状态，同时创建 5 分钟后自动回查 cron（模板见 SKILL.md 第 3.8 节「发单后自动回查」）。” \
   --announce \
   --channel CHANNEL_NAME \
-  --to "CHAT_ID"
+  --to “CHAT_ID”
 ```
 
 ### TIME 填写规则
@@ -149,9 +145,7 @@ openclaw cron add \
 
 调用顺序：
 
-1. `taxi_get_driver_location`（Pro 接口）
+1. `taxi_get_driver_location`
 2. `maps_regeocode`
 
 返回内容建议包含：地址、距离、预计到达时间、司机信息（如可得）。
-
-> ⚠️ `taxi_get_driver_location` 是 Pro 接口，Beta 用户调用会返回 `Streamable HTTP error`，按 `error_handling.md` 的「Beta 版本用户识别」处理。

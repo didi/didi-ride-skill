@@ -7,8 +7,6 @@
 **ClawHub**: [didi-ride-skill-official](https://clawhub.ai/didi/didi-ride-skill-official)
 
 > **服务范围**：支持滴滴出行服务覆盖的中国大陆城市。
->
-> **版本说明**：DiDi MCP 分为 **Beta**（默认）和 **Pro** 两档。扫码或官网领取的 Key 默认为 Beta，可免费使用所有地图/路线类接口（`maps_*`）；**打车类接口（`taxi_create_order`、`taxi_query_order`、`taxi_cancel_order`、`taxi_get_driver_location`）仅 Pro 用户可用**。需在 [DiDi MCP 官网](https://mcp.didichuxing.com) 开通免密支付后自动升级为 Pro。
 
 ## 目录
 
@@ -133,15 +131,10 @@ export DIDI_MCP_KEY="YOUR_MCP_KEY_HERE"
 # 检查 Key 是否已配置
 echo $DIDI_MCP_KEY
 
-# 查看所有工具及函数签名（同时验证 Key 和连通性）
+# 测试 API 连通性
 export MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
-mcporter list "$MCP_URL"
-
-# 测试地图查询（Beta 和 Pro 用户都可用）
 mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"西二旗地铁站","city":"北京市"}'
 ```
-
-> 💡 **测试打车下单**：如需验证打车功能是否可用，请调用 `taxi_create_order`。若返回 `Streamable HTTP error: Unexpected content type: text/plain`，说明当前 Key 为 Beta 版本，无 API 发单权限，需在官网升级为 Pro。
 
 ---
 
@@ -149,26 +142,26 @@ mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"西二旗地铁站
 
 ### 打车相关
 
-| 工具 | 用途 | 权限 |
-|------|------|------|
-| `maps_textsearch` | 文本地址解析，获取经纬度坐标 | 全部用户 |
-| `maps_regeocode` | 逆地址编码（坐标转地址） | 全部用户 |
-| `taxi_estimate` | 价格预估，查询可用车型及价格 | Beta 部分可用（无价格字段）／Pro 完整 |
-| `taxi_create_order` | 创建打车订单 | **仅 Pro** |
-| `taxi_query_order` | 查询订单状态和司机信息 | **仅 Pro** |
-| `taxi_get_driver_location` | 获取司机实时位置 | **仅 Pro** |
-| `taxi_cancel_order` | 取消订单 | **仅 Pro** |
-| `taxi_generate_ride_app_link` | 生成 App 深度链接（无 API 直发权限时的备选方案） | 全部用户 |
+| 工具 | 用途 |
+|------|------|
+| `maps_textsearch` | 文本地址解析，获取经纬度坐标 |
+| `taxi_estimate` | 价格预估，查询可用车型及价格 |
+| `taxi_create_order` | 创建打车订单 |
+| `taxi_query_order` | 查询订单状态和司机信息 |
+| `taxi_get_driver_location` | 获取司机实时位置 |
+| `maps_regeocode` | 逆地址编码（坐标转地址） |
+| `taxi_cancel_order` | 取消订单 |
+| `taxi_generate_ride_app_link` | 生成 App 深度链接（无 API 直发权限时的备选方案） |
 
 ### 路线规划相关
 
-| 工具 | 用途 | 权限 |
-|------|------|------|
-| `maps_direction_driving` | 驾车路线规划 | 全部用户 |
-| `maps_direction_transit` | 公交地铁路线规划 | 全部用户 |
-| `maps_direction_walking` | 步行路线规划 | 全部用户 |
-| `maps_direction_bicycling` | 骑行路线规划 | 全部用户 |
-| `maps_place_around` | 周边搜索 | 全部用户 |
+| 工具 | 用途 |
+|------|------|
+| `maps_direction_driving` | 驾车路线规划 |
+| `maps_direction_transit` | 公交地铁路线规划 |
+| `maps_direction_walking` | 步行路线规划 |
+| `maps_direction_bicycling` | 骑行路线规划 |
+| `maps_place_around` | 周边搜索 |
 
 ---
 
