@@ -9,8 +9,11 @@
 - [错误处理指南](#错误处理指南)
   - [目录](#目录)
   - [mcporter Missing KEY parameter](#mcporter-missing-key-parameter)
+  - [mcporter.json 校验错误](#mcporterjson-校验错误invalid_type--failed-to-parse-json)
+  - [Beta 版本用户识别](#beta-版本用户识别pro-权限受限)
+  - [Unknown MCP server 错误](#unknown-mcp-server-错误)
   - [统一错误码表](#统一错误码表)
-  - [API 返回 400 错误](#400-错误排查)
+  - [参数错误排查](#参数错误排查statuscode400--backend-call-failed)
   - [常见问题 (FAQ)](#常见问题-faq)
   - [获取帮助](#获取帮助)
 
@@ -24,8 +27,73 @@ mcporter 报 `Missing KEY parameter` 时，**不代表 MCP Key 已失效**，禁
 
 1. **`$DIDI_MCP_KEY` 环境变量未展开**：`MCP_URL` 赋值时用了单引号（`'$DIDI_MCP_KEY'`）而非双引号，导致变量字面量传入。确认调用命令中 `MCP_URL` 使用双引号包裹，然后重试。
 2. **当前 shell 未注入环境变量**：openclaw 在每次 agent run 启动时自动注入 `DIDI_MCP_KEY`，但手动在终端直接运行 mcporter 时该变量不存在。执行 `echo $DIDI_MCP_KEY` 验证——若为空，在终端手动 `export DIDI_MCP_KEY=<key>` 后重试，或改在 openclaw agent 环境中调用。
-3. **mcporter.json 配置异常**：若 `~/.openclaw/workspace/config/mcporter.json` 存在但内容异常，mcporter 可能无法正确构造请求。检查该文件内容是否完整。
+3. **mcporter.json 配置异常**：若当前目录下 `config/mcporter.json` 或 `~/.mcporter/mcporter.json` 存在且格式异常，mcporter 会在启动阶段直接崩溃（报 `invalid_type` 或 `Failed to parse JSON`），所有命令不可用。**不要删除该文件**（可能包含用户其他应用的配置），改用 `--config` 绕过——见 SKILL.md §3.2 第 3 条。
 4. **Key 本身确实无效**：若以上均排除，执行 `openclaw config get skills.entries.didi-ride-skill.apiKey` 确认 Key 已配置，若返回空则按 `### 3.9 MCP KEY 与配置` 流程重新配置。
+
+***
+
+## mcporter.json 校验错误（`invalid_type` / `Failed to parse JSON`）
+
+mcporter 启动时报 `invalid_type, expected record` 或 `Failed to parse JSON` 等校验错误时，说明当前目录的 `config/mcporter.json` 或 `~/.mcporter/mcporter.json` 存在且内容异常（格式不正确、空文件、或 AI 之前错误创建的）。
+
+**格式错误的 mcporter.json 会阻止 mcporter 所有命令执行**，包括 URL 直连模式。
+
+**解决方法**（不要删除用户的 mcporter.json，可能包含其他应用配置）：
+
+```bash
+# 创建一个空的合法配置用于绕过
+echo '{"mcpServers":{}}' > /tmp/.mcporter-empty.json
+# 后续所有 mcporter 命令加 --config 参数
+mcporter --config /tmp/.mcporter-empty.json call "$MCP_URL" <tool> --args '...'
+```
+
+本 skill 使用 URL 直连模式，不依赖 mcporter.json。**禁止创建或修改 `config/mcporter.json`**。
+
+***
+
+## Beta 版本用户识别（Pro 权限受限）
+
+DiDi MCP 区分两种用户：
+
+| 版本 | 打车相关接口（`taxi_*`） | 地图相关接口（`maps_*`） | 获取方式 |
+|------|--------------------------|--------------------------|----------|
+| **Beta**（默认） | ❌ 大部分无法调用 | ✅ 全部可用 | 扫码或官网领取 Key 即为 Beta |
+| **Pro** | ✅ 全部可用 | ✅ 全部可用 | 在 [DiDi MCP 官网](https://mcp.didichuxing.com) 开通免密支付后自动升级 |
+
+### 识别信号
+
+当调用以下接口收到 `Streamable HTTP error: Unexpected content type: text/plain; charset=utf-8` 错误时，**判定为 Beta 版本用户**：
+
+- `taxi_create_order`（创建订单）
+- `taxi_query_order`（查询订单）
+- `taxi_cancel_order`（取消订单）
+- `taxi_get_driver_location`（获取司机位置）
+
+> ⚠️ 这个错误信息**对 AI 有误导性**——看起来像 mcporter/网络故障，实际是**权限不足**。不要尝试重试、切换网络、或切换调用方式，这些都没用。
+
+### 行为约束
+
+识别为 Beta 版本后，**必须**：
+
+1. **停止当前打车流程**（不要继续重试或切换 tool）；
+2. 向用户输出以下**固定文案**（原样复制，不要改写）：
+
+   > 您是Beta版本用户，无法API发单打车，需要您前往DiDi MCP 官网开通免密支付，即可成为Pro版本用户，将体验更多打车功能及API接口功能。
+
+3. **禁止向用户索要新的 Key**——此错误与 Key 是否有效无关，是用户账号的订阅等级问题。
+
+### 关于 `taxi_estimate` 的特殊行为
+
+`taxi_estimate`（价格预估）在 Beta 版本下**不会返回 HTTP error**，而是返回"看起来成功"的响应——`traceId` 和车型列表都有，但 `items[].priceText` 和 `items[].priceDiscounted` **字段缺失**。这不作为识别信号（可能只是数据暂缺），AI 正常继续主流程到 `taxi_create_order`，那里会用 HTTP error 信号明确识别权限。
+
+***
+
+## Unknown MCP server 错误
+
+mcporter 报 `Unknown MCP server 'xxx'` 时，根据 `xxx` 的值判断：
+
+- **`xxx` 是工具名**（如 `Unknown MCP server 'maps_textsearch'`）：说明命令格式不对。第一个位置参数必须是完整 URL（`"$MCP_URL"`），第二个位置参数才是 tool name。检查是否遗漏了 URL、或 URL 变量未定义。
+- **`xxx` 是自定义名称**（如 `Unknown MCP server 'didi-mcp'`）：说明使用了 `--server` 标志。**本 skill 禁止使用 `--server` 标志**——它需要已注册的命名 server，而 didi-ride-skill 始终使用 URL 直连模式。去掉 `--server xxx` 参数后重试。
 
 ***
 
@@ -49,12 +117,31 @@ mcporter 报 `Missing KEY parameter` 时，**不代表 MCP Key 已失效**，禁
 
 ***
 
-## 400 错误排查
+## 参数错误排查（`StatusCode=400` / `backend call failed`）
 
-> 💡 **故障排查**：如果配置后 API 返回 400 错误，请检查：
-> 1. 参数名是否正确（如 `keywords` 而非 `keyword`）
-> 2. 城市名称是否使用完整格式（如 `"北京市"` 而非 `"北京"`）
-> 3. 所有参数值是否为字符串格式（加引号）
+mcporter 返回 `backend call failed: ... StatusCode=400` 时，**根因几乎都是参数问题**（mcporter 不会展示 MCP Server 返回的具体错误原因，只给出 StatusCode）。按以下顺序逐项排查：
+
+1. **参数名拼写**——最常见根因。典型错误对照：
+
+   | 错误写法 | 正确写法 | 所属工具 |
+   |----------|----------|----------|
+   | `keyword` | `keywords`（复数） | `maps_textsearch`、`maps_place_around` |
+   | `region` / `province` | `city` | `maps_textsearch`、`maps_direction_transit` |
+   | `origin` / `destination` | `from_lat`/`from_lng`/`from_name` 与 `to_lat`/`to_lng`/`to_name`（六字段） | `taxi_estimate`、`taxi_generate_ride_app_link` |
+   | `order` / `orderId` | `order_id`（snake_case） | `taxi_query_order`、`taxi_cancel_order`、`taxi_get_driver_location` |
+   | `traceId` | `estimate_trace_id` | `taxi_create_order` |
+
+2. **必填参数缺失**——例如 `maps_textsearch` 的 `city` 必填（即使已提供坐标也不能省）。
+
+3. **类型错误**——`--args` JSON 对象内**所有参数值必须是字符串**：
+   - 经纬度 `"39.908858"` ✅，不是 `39.908858` ❌
+   - `product_category` 填 `"1"` ✅，不是 `1` ❌
+
+4. **城市名完整格式**——`"北京市"` ✅，`"北京"` ❌。
+
+5. **自检手段**——如果以上都核对过仍失败，执行 `mcporter list "$MCP_URL"` 查看工具的完整函数签名，逐字段比对。
+
+> ⚠️ **不要因为看到 `StatusCode=400` 就怀疑 mcporter 工具坏了**。这个报错 99% 是参数问题，不是 mcporter 或网络问题。
 
 ***
 

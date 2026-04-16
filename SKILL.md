@@ -95,9 +95,9 @@ metadata:
 | `SKILL.md` | 触发、主流程、硬性门禁、查询订单规则、预约出行规则 | 每次触发必读 |
 | `references/workflow.md` | 分阶段详细流程与命令范式 | 需要实现细节时读 |
 | `references/api_references.md` | MCP 函数签名与参数定义 | 每次调用工具前**必须**核对 |
-| `references/error_handling.md` | 常见错误与恢复策略 | ⚠️ 遇到调用失败时（比如 400 错误）必须读取此文件 |
+| `references/error_handling.md` | Beta 版本识别、mcporter 常见错误、统一错误码、参数错误排查 | ⚠️ 遇到任何调用失败（HTTP error / StatusCode=400 / `-32xxx` 错误码 / `Unknown MCP server` / `Missing KEY parameter`）必须读取此文件 |
 | `references/setup.md` | 安装 mcporter、配置 MCP KEY 的完整步骤 | 用户询问安装/配置问题时读 |
-| `assets/PREFERENCE.md` | 地址别名/车型/手机号偏好 | 用户提到别名地址（家、公司、妈妈家等）、车型、手机号，或未明确给出起终点时**必须**读取。别名匹配规则见执行前检查第 6 条 |
+| `assets/PREFERENCE.md` | 地址别名/车型/手机号偏好 | 用户提到别名地址（家、公司、妈妈家等）、车型、手机号，或未明确给出起终点时**必须**读取。别名匹配规则见执行前检查第 7 条 |
 
 ### 3.2 执行前检查
 
@@ -106,16 +106,25 @@ metadata:
 2. **检查 Key**：执行 `openclaw config get skills.entries.didi-ride-skill.apiKey`，若输出为空或非 `__OPENCLAW_REDACTED__`，按 `### 3.9 MCP KEY 与配置` 流程引导。Key 缺失时 mcporter 的报错信息具有误导性，不要尝试绕过。
    - ⚠️ **若 Key 已配置（返回 `__OPENCLAW_REDACTED__`）但 mcporter 仍报 `Missing KEY parameter`**：**不是 Key 失效**，**禁止向用户索要 Key**。排查步骤见 `references/error_handling.md` 中的「mcporter Missing KEY parameter」章节。
 
-3. **mcporter 调用格式**：
+3. **mcporter.json 注意事项**：本 skill 使用 URL 直连模式，**不依赖 `config/mcporter.json`**，**禁止创建或修改该文件**。如果 mcporter 启动时报 JSON 校验错误（`invalid_type` / `Failed to parse JSON`），参见 `references/error_handling.md` 中的「mcporter.json 校验错误」章节。
+
+4. **mcporter 调用格式**（固定写法，不要变形）：
 
 ```bash
 MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
 mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 ```
 
-4. **参数值必须加引号**（字符串格式），否则 API 会报”缺少必填参数”。
-5. **先预估再下单**：`taxi_create_order` 依赖 `taxi_estimate` 返回的 `traceId`，没有 traceId 下单会失败。traceId 有时效性，过期（`-32021` 错误）需重新预估。
-6. **起终点处理**：
+**必读注意事项**：
+- `MCP_URL` 赋值和 `"$MCP_URL"` 引用**都必须用英文双引号**，否则 `$DIDI_MCP_KEY` 不会被 shell 展开。禁止用单引号或中文引号。
+- **禁止添加 `--server` 标志**（如 `--server didi-mcp`）。`--server` 会让 mcporter 去查找已注册的命名 server，找不到直接报 `Unknown MCP server`；即使找到了也会和 URL 参数冲突导致 `Missing tool name`。
+- **参数名必须核对 `references/api_references.md`**，不要凭记忆。常见致命错误：`keyword` → 应为 `keywords`；`region` → 应为 `city`；`from_lng/from_lat/to_lng/to_lat` → 应为 `from_name/from_lat/from_lng/to_name/to_lat/to_lng`（六字段，不是四字段）。
+- mcporter 对参数错误的报错信息为 `backend call failed: ... StatusCode=400`（**不会告诉你具体哪个参数错了**），遇到此错误第一反应是核对参数名，详见 `references/error_handling.md`。
+- 遇到不确定的参数名时，执行 `mcporter list "$MCP_URL"` 可以查看所有工具的完整签名。
+
+5. **参数值必须加引号**（字符串格式），包括经纬度和 `product_category` 等数字语义字段——API 只接受字符串，否则会报"缺少必填参数"。
+6. **先预估再下单**：`taxi_create_order` 依赖 `taxi_estimate` 返回的 `traceId`，没有 traceId 下单会失败。traceId 有时效性，过期（`-32021` 错误）需重新预估。
+7. **起终点处理**：
    - 坐标必须来自 `maps_textsearch`，不要凭空猜测坐标。
    - **禁止用对话历史记忆补充起终点**——用户可能已经换了地方。
    - **起终点缺失时**按以下顺序补全：
@@ -133,7 +142,7 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 
 ### 3.4 主流程（最小可执行）
 
-1. 地址解析：`maps_textsearch`（必要时结合 `assets/PREFERENCE.md`，按执行前检查第 6 条处理）。
+1. 地址解析：`maps_textsearch`（必要时结合 `assets/PREFERENCE.md`，按执行前检查第 7 条处理）。
 2. 确认起终点：推断的地址（如别名推断）或 `maps_textsearch` 返回多个候选结果时，必须向用户确认（如"从家出发去首都机场T3航站楼，确认吗？"）；用户明确指定且精确匹配的地点无需确认。用户纠正则按纠正内容重新解析。
 3. 价格预估：`taxi_estimate`，记录 `traceId`。
 4. 车型决策：
@@ -142,6 +151,7 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
    - 偏好也未配置：向用户询问车型，不要自行推荐。
    - 可用车型以 `taxi_estimate` API 返回为准，获取对应的 `productCategory` 创建订单。
 5. 创建订单：`taxi_create_order`（使用最新 `traceId`）。
+   - ⚠️ **Beta 版本检测**：若此调用返回 `Streamable HTTP error: Unexpected content type: text/plain`，说明当前 Key 是 Beta 版本（无 Pro 权限），**立即停止流程**，按 `references/error_handling.md` 的「Beta 版本用户识别」章节向用户输出固定文案。禁止重试、禁止切换 Key、禁止跳过此步继续往下。
 6. 结果输出：给出订单号、起终点、车型、预估价，末尾提示 `💡 发送「查询订单」可了解当前订单状态`，并告知 `⏱️ 将在 5 分钟后自动为您回查订单状态`。
 7. ⚠️ 自动回查（必做）：根据 `### 3.8 发单后自动回查` 中的 cron 指令内容，创建定时任务，参数信息严格遵循章节内要求。此步不可省略。
 
@@ -169,6 +179,8 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
 mcporter call "$MCP_URL" taxi_query_order --args '{"order_id":"ORDER_ID"}'
 ```
+
+⚠️ **Beta 版本检测**：若返回 `Streamable HTTP error: Unexpected content type: text/plain`，按 `references/error_handling.md` 的「Beta 版本用户识别」章节处理（输出固定文案并停止，不要重试）。
 
 #### 3.6.1 状态码与输出规则
 
@@ -286,8 +298,11 @@ openclaw message send --channel {CHANNEL_NAME} --target {CHAT_ID} --media "https
 
 ### 3.10 工具清单
 
-| 领域 | 工具 |
-|------|------|
-| 打车 | `maps_textsearch`, `taxi_estimate`, `taxi_create_order`, `taxi_query_order`, `taxi_get_driver_location`, `taxi_cancel_order`, `maps_regeocode`, `taxi_generate_ride_app_link`（用户无 API 直发权限时的备选：生成深度链接让用户在 App 内完成发单） |
-| 路线 | `maps_direction_driving`, `maps_direction_transit`, `maps_direction_walking`, `maps_direction_bicycling` |
-| 周边 | `maps_place_around` |
+| 领域 | 工具 | 权限 |
+|------|------|------|
+| 地图 | `maps_textsearch`, `maps_regeocode` | 全部用户 |
+| 路线 | `maps_direction_driving`, `maps_direction_transit`, `maps_direction_walking`, `maps_direction_bicycling` | 全部用户 |
+| 周边 | `maps_place_around` | 全部用户 |
+| 打车 | `taxi_estimate`（预估）, `taxi_create_order`（下单）, `taxi_query_order`（查单+司机位置）, `taxi_cancel_order`（取消）, `taxi_get_driver_location`（司机位置） | **仅 Pro** |
+
+> ⚠️ **Pro 权限说明**：打车类（`taxi_create_order` 等）需 Pro 版本，Beta 用户调用会返回 `Streamable HTTP error`，处理方式见 `references/error_handling.md` 的「Beta 版本用户识别」章节。
