@@ -366,4 +366,3 @@ AI: ☕ 周边搜索结果
 - 详细工作流程: [SKILL.md](SKILL.md)
 - API 参考文档: [api_references.md](references/api_references.md)
 - 错误处理指南: [error_handling.md](references/error_handling.md)
-- 评测基准设计: [BENCHMARK.md](BENCHMARK.md)
