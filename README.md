@@ -131,11 +131,8 @@ export DIDI_MCP_KEY="YOUR_MCP_KEY_HERE"
 # 检查 Key 是否已配置
 echo $DIDI_MCP_KEY
 
-# 查看所有工具及函数签名（同时验证 Key 和连通性）
+# 测试 API 连通性
 export MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
-mcporter list "$MCP_URL"
-
-# 测试地图查询
 mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"西二旗地铁站","city":"北京市"}'
 ```
 
@@ -148,13 +145,13 @@ mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"西二旗地铁站
 | 工具 | 用途 |
 |------|------|
 | `maps_textsearch` | 文本地址解析，获取经纬度坐标 |
-| `maps_regeocode` | 逆地址编码（坐标转地址） |
 | `taxi_estimate` | 价格预估，查询可用车型及价格 |
 | `taxi_create_order` | 创建打车订单 |
 | `taxi_query_order` | 查询订单状态和司机信息 |
 | `taxi_get_driver_location` | 获取司机实时位置 |
+| `maps_regeocode` | 逆地址编码（坐标转地址） |
 | `taxi_cancel_order` | 取消订单 |
-| `taxi_generate_ride_app_link` | 生成 App 深度链接 |
+| `taxi_generate_ride_app_link` | 生成 App 深度链接（无 API 直发权限时的备选方案） |
 
 ### 路线规划相关
 
@@ -369,3 +366,4 @@ AI: ☕ 周边搜索结果
 - 详细工作流程: [SKILL.md](SKILL.md)
 - API 参考文档: [api_references.md](references/api_references.md)
 - 错误处理指南: [error_handling.md](references/error_handling.md)
+- 评测基准设计: [BENCHMARK.md](BENCHMARK.md)

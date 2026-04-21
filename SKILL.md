@@ -125,14 +125,14 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 5. **参数值必须加引号**（字符串格式），包括经纬度和 `product_category` 等数字语义字段——API 只接受字符串，否则会报"缺少必填参数"。
 6. **先预估再下单**：`taxi_create_order` 依赖 `taxi_estimate` 返回的 `traceId`，没有 traceId 下单会失败。traceId 有时效性，过期（`-32021` 错误）需重新预估。
 7. **起终点处理**：
-   - 坐标必须来自 `maps_textsearch`，不要凭空猜测坐标。
-   - **禁止用对话历史记忆补充起终点**——用户可能已经换了地方。
-   - **起终点缺失时**按以下顺序补全：
-     - ① 读 `assets/PREFERENCE.md`，若有地址别名**且地址值非空**，根据场景推断（如早晨→起点"家"、下班→起点"公司"）。别名行存在但地址为空 = 未配置。
-     - ② 若无可用别名，直接询问用户。
-   - **别名匹配规则（精确优先）**："家"只匹配别名"家"，不匹配"妈妈家"；需明确含"妈妈"语义才匹配"妈妈家"。其他自定义别名同理。
-     - **完整扫描**：`assets/PREFERENCE.md` 的"地址别名"表是**用户可无限追加行**的列表。模板默认只有"家""公司"两行，但实际文件可能已追加"妈妈家""儿子学校""健身房"等自定义别名。读取时**必须扫描整张表格**（读到下一个 `##` 章节头为止），不要只看前两行就断定"没有此别名"。
-   - **推断的起终点、或 `maps_textsearch` 返回多个候选结果时，必须在主流程 step 2 向用户确认**；用户明确指定且精确匹配的地点无需确认。
+
+   **坐标来源**：坐标必须来自 `maps_textsearch`，不要凭空猜测。**禁止用对话历史记忆补充起终点**——用户可能已换了地方。
+
+   **缺失补全**（按优先级）：① 读 `assets/PREFERENCE.md`，有地址别名**且值非空**则按场景推断（早晨→起点"家"、下班→起点"公司"；别名行存在但地址为空 = 未配置）→ ② 无可用别名则直接询问用户。
+
+   **别名匹配**：精确优先——"家"只匹配"家"，不匹配"妈妈家"；需明确含"妈妈"语义才匹配"妈妈家"。读取时**必须扫描整张表格**（到下一个 `##` 为止），不要只看默认的前两行——用户可能已追加"妈妈家""儿子学校""健身房"等自定义别名。
+
+   **确认规则**：推断的起终点、或 `maps_textsearch` 返回多个候选时，必须在主流程 step 2 向用户确认；用户明确指定且精确匹配的地点无需确认。
 
 ### 3.3 用户确认策略
 
@@ -150,12 +150,12 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
    - **别名推断**（从 PREFERENCE.md 推断的起终点）→ 向用户确认 + 告知推断来源（如"按偏好里「家」推断终点是望京 SOHO，对吗？"）；
    - 用户明确指定且文本精确匹配的地点 → 无需确认。用户纠正则按纠正内容重新解析。
 3. 价格预估：`taxi_estimate`，记录 `traceId`。
-4. 车型决策：
-   - 用户明确车型（如"叫快车"）→ 在 `taxi_estimate` 返回的车型列表中**精确匹配**该车型名称对应的 `productCategory`（如：快车=1，专车=8）。注意：快车（1）和特惠快车（201）是**不同服务等级**，不可因价格更优而自动替换；
-   - 用户未明确车型 → 使用 `assets/PREFERENCE.md` 中场景车型偏好的**精确 `productCategory` 值**；
-   - 若 `taxi_estimate` 返回的车型列表不包含用户指定或偏好的 `productCategory` → 向用户说明并让其重新选择，不要默默用近似车型替代；
-   - 偏好也未配置：向用户询问车型，不要自行推荐。
-   - 可用车型以 `taxi_estimate` API 返回为准，获取对应的 `productCategory` 创建订单。
+4. 车型决策（优先级：**当前消息 > 偏好 > 询问用户**）：
+   - 用户在当前消息中明确指定车型（如"叫快车""帮我叫专车"）→ 在 `taxi_estimate` 返回列表中**精确匹配**对应 `productCategory`（快车=1，专车=8），覆盖一切偏好设置；
+   - 用户未指定 → 使用 `assets/PREFERENCE.md` 中场景车型偏好的精确 `productCategory` 值；
+   - 偏好也未配置 → 向用户询问车型，不要自行推荐；
+   - 注意：快车（1）和特惠快车（201）是**不同服务等级**，不可因价格更优而自动替换；
+   - 可用车型以 `taxi_estimate` API 返回为准。若不包含指定/偏好的 `productCategory`，向用户说明并让其重新选择，不要默默用近似车型替代。
 5. 创建订单：`taxi_create_order`（使用最新 `traceId`）。
    - 若此调用返回 `Streamable HTTP error: Unexpected content type: text/plain`，**立即停止流程**，按 `references/error_handling.md` 的「taxi_create_order 调用失败」章节向用户输出固定文案。禁止重试、禁止切换 Key、禁止跳过此步继续往下。
 6. 结果输出：给出订单号、起终点、车型、预估价，末尾提示 `💡 发送「查询订单」可了解当前订单状态`，并告知 `⏱️ 将在 5 分钟后自动为您回查订单状态`。
@@ -213,7 +213,7 @@ mcporter call "$MCP_URL" taxi_query_order --args '{"order_id":"ORDER_ID"}'
 - 使用 cron 一次性任务（`--at`），到点由 isolated agent 独立执行完整打车流程；
 - ⚠️ `--message` 必须包含完整起终点（带城市前缀）和车型，isolated session 无历史上下文。起点或终点缺失时先从 `assets/PREFERENCE.md` 推断并向用户确认，推断不了则必须先询问用户，**不要自行推断未知信息**；
 - 到点后 agent 自行执行：地址解析 → 价格预估（获取最新 traceId）→ 创建订单；
-- 如果无法获取当前会话的 metadata，不要创建 cron，改为在回复中提醒用户主动查询；
+- 如果无法获取当前会话的 metadata（channel/chat_id），**仅跳过 cron 创建步骤**，其余流程（地址解析 → 价格预估 → 展示结果）**正常执行不受影响**。在回复中提醒用户到时手动发消息叫车。metadata 不可用 ≠ 放弃整个打车流程；
 - 如果定时任务创建失败，必须在回复中提示用户，不能默默失败。
 
 ```bash
@@ -253,14 +253,12 @@ openclaw cron add \
 ### 3.8 发单后自动回查
 
 发单成功后（实时单或预约单），根据本章节下文 "openclaw cron add" 命令，创建 cron 任务，务必按照本章节下文bash命令参数设置。
-- 如果无法获取当前会话的 metadata，不要创建 cron，改为在回复中提醒用户主动查询订单状态。
+- 如果无法获取当前会话的 metadata（channel/chat_id），**仅跳过 cron 创建步骤**，主流程正常完成（已出单则告知用户"5 分钟后可发送'查询订单'了解最新状态"）。
 - 如果定时任务创建失败，必须在回复中提示用户，不能默默失败。
 
 ```bash
-# ⚠️ 替换占位符：
+# ⚠️ 替换占位符（CHANNEL_NAME/CHAT_ID 规则见 §3.7）：
 #   ORDER_ID     → 实际订单号（taxi_create_order 返回）
-#   CHANNEL_NAME → 当前会话 metadata 中的 channel 字段（如 feishu、telegram），CHANNEL_NAME 不需要带引号，例如: feishu ✅, "feishu" ❌。不允许使用 last 作为参数值。
-#   CHAT_ID      → 当前会话 metadata 中的 chat_id 字段
 
 openclaw cron add \
   --name "didi-ride-skill:check:ORDER_ID" \
@@ -274,32 +272,34 @@ openclaw cron add \
 
 ### 3.9 MCP KEY 与配置
 
-> **术语说明**：滴滴平台称此凭证为「MCP KEY」，OpenClaw 配置字段统一叫 `apiKey`，注入后的环境变量为 `DIDI_MCP_KEY`——三者是同一个值。
+> **术语说明**：滴滴平台称此凭证为「MCP KEY」，OpenClaw 配置字段统一叫 `apiKey`，注入后的环境变量为 `DIDI_MCP_KEY`——三者是同一个值。通过 `openclaw config set` 持久化后，OpenClaw 在每次 agent run 启动时自动注入为环境变量。
 
-⚠️ Key 来源：通过 `openclaw config set` 持久化后，OpenClaw 在每次 agent run 启动时自动注入为环境变量 `DIDI_MCP_KEY`。
+#### 3.9.1 检查 Key 状态
+
 ```bash
-# ⚠️ 可以通过以下命令判断当前 DIDI_MCP_KEY 是否配置。如果输出 __OPENCLAW_REDACTED__ ，即为已配置，可在后面使用环境变量`DIDI_MCP_KEY`。
+# 执行该命令以判断当前 DIDI_MCP_KEY 是否已配置
 openclaw config get skills.entries.didi-ride-skill.apiKey
 ```
+输出 `__OPENCLAW_REDACTED__` = 已配置，可使用环境变量 `$DIDI_MCP_KEY`；输出为空 = 未配置。
 
-#### 3.9.1 用户在对话中提供 Key 时（必须持久化）
+#### 3.9.2 持久化用户 Key
 
-当用户回复了 Key（如"我的 Key 是 xxxxxx"），**必须**执行以下命令持久化 & 在当前Shell生效：
+⚠️ 当用户回复了 Key（如"我的 Key 是 xxxxxx"），**必须**执行以下命令持久化 & 在当前 Shell 生效：
 
 ```bash
-# ⚠️ 将 YOUR_KEY 替换为用户提供的实际值
+#   YOUR_KEY → 实际的 MCP KEY
 openclaw config set 'skills.entries.didi-ride-skill.apiKey' 'YOUR_KEY'
-# 执行 `export` 使当前 shell 生效
 export DIDI_MCP_KEY='YOUR_KEY'
 ```
 
-持久化成功后：
-- OpenClaw 在所有后续 agent run（含 cron isolated session）中自动注入 `DIDI_MCP_KEY`
-- ⚠️ 命令执行成功后输出 `"Restart the gateway to apply."` ——**这是通用提示，必须忽略，禁止执行任何 restart / 重启操作**。`apiKey` 在每次 agent run 启动时动态读取，无需重启即可生效；强制重启会导致网关崩溃。
+- 持久化后 OpenClaw 在所有后续 agent run（含 cron isolated session）中自动注入 `DIDI_MCP_KEY`
+- ⚠️⚠️⚠️ 命令输出 `"Restart the gateway to apply."` ——**这是通用提示，必须忽略，禁止执行 restart**。`apiKey` 每次 agent run 动态读取，无需重启；强制重启会导致网关崩溃
 
-⚠️ Key 未配置**或** MCP 返回鉴权失败（`error.code: -32002`）时，执行以下两步：
+#### 3.9.3 Key 缺失或鉴权失败
 
-1. 执行下面的 "openclaw message send" 命令，发送二维码图片（`{CHAT_ID}` → metadata 的 chat_id，`{CHANNEL_NAME}` → metadata 的 channel）：
+⚠️ Key 未配置**或** MCP 返回鉴权失败（`error.code: -32002`）时，依次执行：
+
+1. 发送二维码图片（`{CHAT_ID}` → metadata 的 chat_id，`{CHANNEL_NAME}` → metadata 的 channel）：
 
 ```bash
 openclaw message send --channel {CHANNEL_NAME} --target {CHAT_ID} --media "https://s3-yspu-cdn.didistatic.com/mcp-web/qrcode/didi_ride_skill_qrcode.png" --message "滴滴出行APP扫码获取MCP Key，解锁一键打车"
