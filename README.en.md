@@ -131,8 +131,11 @@ Edit `~/.openclaw/openclaw.json`:
 # Check that the key is set
 echo $DIDI_MCP_KEY
 
-# Test API connectivity
+# List all available tools and their signatures (verifies key + connectivity)
 export MCP_URL="https://mcp.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
+mcporter list "$MCP_URL"
+
+# Test map lookup
 mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"Xierqi Subway Station","city":"北京市"}'
 ```
 
@@ -145,13 +148,13 @@ mcporter call "$MCP_URL" maps_textsearch --args '{"keywords":"Xierqi Subway Stat
 | Tool | Purpose |
 |------|---------|
 | `maps_textsearch` | Text-based address lookup, returns coordinates |
+| `maps_regeocode` | Reverse geocoding (coordinates → address) |
 | `taxi_estimate` | Price estimate across available vehicle types |
 | `taxi_create_order` | Create a ride order |
 | `taxi_query_order` | Query order status and driver info |
 | `taxi_get_driver_location` | Get driver's real-time location |
-| `maps_regeocode` | Reverse geocoding (coordinates → address) |
 | `taxi_cancel_order` | Cancel an order |
-| `taxi_generate_ride_app_link` | Generate deep link to DiDi App (fallback when direct API dispatch is unavailable) |
+| `taxi_generate_ride_app_link` | Generate deep link to DiDi App |
 
 ### Route Planning
 
