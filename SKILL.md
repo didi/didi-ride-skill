@@ -134,6 +134,11 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 
    **确认规则**：推断的起终点、或 `maps_textsearch` 返回多个候选时，必须在主流程 step 2 向用户确认；用户明确指定且精确匹配的地点无需确认。
 
+8. **`taxi_create_order` 参数约束**：
+- 只接受三个字段：`estimate_trace_id`、`product_category`、`caller_car_phone`（可选）
+- `taxi_create_order` 的 `caller_car_phone` 未由用户提供时，从 `assets/PREFERENCE.md` 的「默认偏好」表读取；都没有就**不传该参数**，禁止在对话中反复向用户索要手机号——skill 级别已允许没有手机号直接发单，口头询问一次若用户未答应即视为"用默认/不传"。
+- 不要把 `taxi_estimate` 的坐标/名称字段（`from_lat` / `from_lng` / `from_name` / `to_lat` / `to_lng` / `to_name`）带入
+
 ### 3.3 用户确认策略
 
 | 场景 | 规则 |
@@ -156,6 +161,7 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
    - 偏好也未配置 → 向用户询问车型，不要自行推荐；
    - 注意：快车（1）和特惠快车（201）是**不同服务等级**，不可因价格更优而自动替换；
    - 可用车型以 `taxi_estimate` API 返回为准。若不包含指定/偏好的 `productCategory`，向用户说明并让其重新选择，不要默默用近似车型替代。
+   - ⚡ **简化原则（尤其对 reasoning 模型）**：用户在当前消息中说什么车型就用什么，不要进一步质疑或反复确认；偏好缺失时直接向用户问一次即可，不要在同一轮列出多个权衡选项让用户挑。规则很短，不要过度展开思考分支。
 5. 创建订单：`taxi_create_order`（使用最新 `traceId`）。
    - 若此调用返回 `Streamable HTTP error: Unexpected content type: text/plain`，**立即停止流程**，按 `references/error_handling.md` 的「taxi_create_order 调用失败」章节向用户输出固定文案。禁止重试、禁止切换 Key、禁止跳过此步继续往下。
 6. 结果输出：给出订单号、起终点、车型、预估价，末尾提示 `💡 发送「查询订单」可了解当前订单状态`，并告知 `⏱️ 将在 5 分钟后自动为您回查订单状态`。
@@ -175,7 +181,7 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 - **地址别名**（"我家在…"、"公司在…"、"儿子的学校是…"、"妈妈家在…"）：先调用 `maps_textsearch` 解析地址获取坐标，然后更新「地址别名」表——已有别名更新对应行，新别名追加新行。别名由用户定义，不限于"家""公司"。
 - **场景车型**（"上班用快车"、"下班用特惠和快车"）：更新「场景车型偏好」表对应行。品类代码参考表底注释，多车型用英文逗号分隔（如 `1,201`）。
 - **叫车手机号**（"我的手机号是…"）：更新「默认偏好」表中的叫车手机号行。
-- **创建订单时**：若 PREFERENCE.md 中配置了叫车手机号，将其作为 `caller_car_phone` 参数传入 `taxi_create_order`。
+- **创建订单时**：若 PREFERENCE.md 中配置了叫车手机号，将其作为 `caller_car_phone` 参数传入 `taxi_create_order`，`caller_car_phone` 为可选参数，若未配置则不传。
 
 ### 3.6 查询订单
 
