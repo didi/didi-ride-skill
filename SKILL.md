@@ -137,7 +137,7 @@ mcporter call "$MCP_URL" <tool> --args '{"key":"value"}'
 8. **`taxi_create_order` 参数约束**：
 - 只接受三个字段：`estimate_trace_id`、`product_category`、`caller_car_phone`（可选）
 - `taxi_create_order` 的 `caller_car_phone` 未由用户提供时，从 `assets/PREFERENCE.md` 的「默认偏好」表读取；都没有就**不传该参数**，禁止在对话中反复向用户索要手机号——skill 级别已允许没有手机号直接发单，口头询问一次若用户未答应即视为"用默认/不传"。
-- 不要把 `taxi_estimate` 的坐标/名称字段（`from_lat` / `from_lng` / `from_name` / `to_lat` / `to_lng` / `to_name`）带入
+- 不要把 `taxi_estimate` 的坐标/名称字段（`from_lat` / `from_lng` / `from_name` / `to_lat` / `to_lng` / `to_name`）带入。
 
 ### 3.3 用户确认策略
 
