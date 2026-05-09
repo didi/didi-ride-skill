@@ -95,7 +95,7 @@ metadata:
 | `SKILL.md` | 触发、主流程、硬性门禁、查询订单规则、预约出行规则 | 每次触发必读 |
 | `references/workflow.md` | 分阶段详细流程与命令范式 | 需要实现细节时读 |
 | `references/api_references.md` | MCP 函数签名与参数定义 | 每次调用工具前**必须**核对 |
-| `references/error_handling.md` | create_order 失败提示、mcporter 常见错误、统一错误码、参数错误排查 | ⚠️ 遇到任何调用失败（HTTP error / StatusCode=400 / `-32xxx` 错误码 / `Unknown MCP server` / `Missing KEY parameter`）必须读取此文件 |
+| `references/error_handling.md` | create_order 失败提示、mcporter 常见错误、统一错误码、参数错误排查、apiKey 占位符泄漏 | ⚠️ 遇到任何调用失败（HTTP error / StatusCode=400 / `-32xxx` 错误码 / `Unknown MCP server` / `Missing KEY parameter` / `SSE error: Invalid content type`）必须读取此文件 |
 | `references/setup.md` | 安装 mcporter、配置 MCP KEY 的完整步骤 | 用户询问安装/配置问题时读 |
 | `assets/PREFERENCE.md` | 地址别名/车型/手机号偏好 | 用户提到别名地址（家、公司、妈妈家等）、车型、手机号，或未明确给出起终点时**必须**读取。别名匹配规则见执行前检查第 7 条 |
 
@@ -105,6 +105,7 @@ metadata:
 
 2. **检查 Key**：执行 `openclaw config get skills.entries.didi-ride-skill.apiKey`，若输出为空或非 `__OPENCLAW_REDACTED__`，按 `### 3.9 MCP KEY 与配置` 流程引导。Key 缺失时 mcporter 的报错信息具有误导性，不要尝试绕过。
    - ⚠️ **若 Key 已配置（返回 `__OPENCLAW_REDACTED__`）但 mcporter 仍报 `Missing KEY parameter`**：**不是 Key 失效**，**禁止向用户索要 Key**。排查步骤见 `references/error_handling.md` 中的「mcporter Missing KEY parameter」章节。
+   - ⚠️ **`__OPENCLAW_REDACTED__` 是"已配置"哨兵值、不是真实 Key**：禁止从 `openclaw config get`（含 `--raw`）提取 Key 字面量；URL 中 `?key=...` 必须固定用 `$DIDI_MCP_KEY`。误把哨兵拼进 URL 会触发 `SSE error: Invalid content type`，详见 error_handling.md 同名章节。
 
 3. **mcporter.json 注意事项**：本 skill 使用 URL 直连模式，**不依赖 `config/mcporter.json`**，**禁止创建或修改该文件**。如果 mcporter 启动时报 JSON 校验错误（`invalid_type` / `Failed to parse JSON`），参见 `references/error_handling.md` 中的「mcporter.json 校验错误」章节。
 
@@ -222,24 +223,25 @@ mcporter call "$MCP_URL" taxi_query_order --args '{"order_id":"ORDER_ID"}'
 - 如果无法获取当前会话的 metadata（channel/chat_id），**仅跳过 cron 创建步骤**，其余流程（地址解析 → 价格预估 → 展示结果）**正常执行不受影响**。在回复中提醒用户到时手动发消息叫车。metadata 不可用 ≠ 放弃整个打车流程；
 - 如果定时任务创建失败，必须在回复中提示用户，不能默默失败。
 
-```bash
-# ⚠️ 替换占位符：
-#   FROM_NAME    → 带城市前缀的起点全称（如"北京市西二旗地铁站"）
-#   TO_NAME      → 带城市前缀的终点全称（如"北京市佰嘉城小区"）
-#   VEHICLE      → 车型（如"快车"）
-#   TIME         → 见下方时间规则
-#   CHANNEL_NAME → 当前会话 metadata 中的 channel 字段（如 feishu、telegram），CHANNEL_NAME 不需要带引号，例如: feishu ✅, "feishu" ❌。不允许使用 last 作为参数值。
-#   CHAT_ID      → 当前会话 metadata 中的 chat_id 字段
 
+```bash
+# ⚠️ 占位符替换规则：所有 <XXX> 形式都是占位符，必须替换为真实值；
+#    禁止保留 <> 字面、禁止当成 shell 变量加 $（不是 $TIME / $CHAT_ID）。
+#   <FROM_NAME>    → 带城市前缀的起点全称（如"北京市西二旗地铁站"）
+#   <TO_NAME>      → 带城市前缀的终点全称（如"北京市佰嘉城小区"）
+#   <VEHICLE>      → 车型（如"快车"）
+#   <TIME>         → 见下方时间规则（如 "10m" / "2h" / ISO 时间）
+#   <CHANNEL_NAME> → 当前会话 metadata 中的 channel 字段（如 feishu、telegram），命令行参数不带引号；不可用 last
+#   <CHAT_ID>      → 当前会话 metadata 中的 chat_id 字段
 
 openclaw cron add \
   --name "didi-ride-skill:$(date +%s)" \
-  --at "TIME" \
+  --at "<TIME>" \
   --session isolated \
-  --message "执行定时打车：起点「FROM_NAME」，终点「TO_NAME」，车型「VEHICLE」。请完整执行打车流程：地址解析 → 价格预估（获取最新 traceId）→ 创建订单。订单创建成功后，输出订单信息并提示用户可发送「查询订单」了解订单状态，同时创建 5 分钟后自动回查 cron（模板见 SKILL.md 第 3.8 节「发单后自动回查」）。" \
+  --message "执行定时打车：起点「<FROM_NAME>」，终点「<TO_NAME>」，车型「<VEHICLE>」。请完整执行打车流程：地址解析 → 价格预估（获取最新 traceId）→ 创建订单。订单创建成功后，输出订单信息并提示用户可发送「查询订单」了解订单状态，同时创建 5 分钟后自动回查 cron（模板见 SKILL.md 第 3.8 节「发单后自动回查」）。" \
   --announce \
-  --channel CHANNEL_NAME \
-  --to "CHAT_ID"
+  --channel <CHANNEL_NAME> \
+  --to "<CHAT_ID>"
 ```
 
 #### 3.7.1 TIME 填写规则
@@ -260,20 +262,21 @@ openclaw cron add \
 
 发单成功后（实时单或预约单），根据本章节下文 "openclaw cron add" 命令，创建 cron 任务，务必按照本章节下文bash命令参数设置。
 - 如果无法获取当前会话的 metadata（channel/chat_id），**仅跳过 cron 创建步骤**，主流程正常完成（已出单则告知用户"5 分钟后可发送'查询订单'了解最新状态"）。
-- 如果定时任务创建失败，必须在回复中提示用户，不能默默失败。
+- 如果定时任务创建失败（命令本身报错），必须在回复中提示用户，不能默默失败。
 
 ```bash
-# ⚠️ 替换占位符（CHANNEL_NAME/CHAT_ID 规则见 §3.7）：
-#   ORDER_ID     → 实际订单号（taxi_create_order 返回）
+# ⚠️ 占位符替换规则：所有 <XXX> 形式都是占位符，必须替换为真实值，禁止保留 <> 字面或加 $ 当 shell 变量。
+#   <ORDER_ID>     → 实际订单号（taxi_create_order 返回）
+#   <CHANNEL_NAME> / <CHAT_ID> → 同 §3.7，从会话 metadata 读取或用兜底值
 
 openclaw cron add \
-  --name "didi-ride-skill:check:ORDER_ID" \
+  --name "didi-ride-skill:check:<ORDER_ID>" \
   --at "5m" \
   --session isolated \
-  --message "查询滴滴订单状态：订单号 ORDER_ID。调用 taxi_query_order 查询并输出当前状态。如果司机已接单，输出司机姓名、车型、车牌、电话及预计到达时间；如果仍在匹配中，提示用户耐心等待。" \
+  --message "查询滴滴订单状态：订单号 <ORDER_ID>。调用 taxi_query_order 查询并输出当前状态。如果司机已接单，输出司机姓名、车型、车牌、电话及预计到达时间；如果仍在匹配中，提示用户耐心等待。" \
   --announce \
-  --channel CHANNEL_NAME \
-  --to "CHAT_ID"
+  --channel <CHANNEL_NAME> \
+  --to "<CHAT_ID>"
 ```
 
 ### 3.9 MCP KEY 与配置
@@ -283,10 +286,12 @@ openclaw cron add \
 #### 3.9.1 检查 Key 状态
 
 ```bash
-# 执行该命令以判断当前 DIDI_MCP_KEY 是否已配置
+# 仅用于判断 DIDI_MCP_KEY 是否已配置；输出不是 Key 值，不可代入 URL
 openclaw config get skills.entries.didi-ride-skill.apiKey
 ```
-输出 `__OPENCLAW_REDACTED__` = 已配置，可使用环境变量 `$DIDI_MCP_KEY`；输出为空 = 未配置。
+结果输出为空 = 未配置；输出 `__OPENCLAW_REDACTED__` = 已配置，**必须用**环境变量 `$DIDI_MCP_KEY` 拼接 URL。
+
+⚠️ `openclaw config get`（含 `--raw`）永远不返回真实 Key——任何把哨兵值拼入 URL/header/参数的请求都会失败，见 error_handling.md「SSE error / apiKey 占位符泄漏」。
 
 #### 3.9.2 持久化用户 Key
 
