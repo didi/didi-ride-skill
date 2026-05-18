@@ -9,6 +9,7 @@
 - [错误处理指南](#错误处理指南)
   - [目录](#目录)
   - [mcporter Missing KEY parameter](#mcporter-missing-key-parameter)
+  - [SSE error / apiKey 占位符泄漏](#sse-error--apikey-占位符泄漏)
   - [mcporter.json 校验错误](#mcporterjson-校验错误invalid_type--failed-to-parse-json)
   - [taxi_create_order 调用失败](#taxi_create_order-调用失败)
   - [Unknown MCP server 错误](#unknown-mcp-server-错误)
@@ -29,6 +30,45 @@ mcporter 报 `Missing KEY parameter` 时，**不代表 MCP Key 已失效**，禁
 2. **当前 shell 未注入环境变量**：openclaw 在每次 agent run 启动时自动注入 `DIDI_MCP_KEY`，但手动在终端直接运行 mcporter 时该变量不存在。执行 `echo $DIDI_MCP_KEY` 验证——若为空，在终端手动 `export DIDI_MCP_KEY=<key>` 后重试，或改在 openclaw agent 环境中调用。
 3. **mcporter.json 配置异常**：若当前目录下 `config/mcporter.json` 或 `~/.mcporter/mcporter.json` 存在且格式异常，mcporter 会在启动阶段直接崩溃（报 `invalid_type` 或 `Failed to parse JSON`），所有命令不可用。**不要删除该文件**（可能包含用户其他应用的配置），改用 `--config` 绕过——见 SKILL.md §3.2 第 3 条。
 4. **Key 本身确实无效**：若以上均排除，执行 `openclaw config get skills.entries.didi-ride-skill.apiKey` 确认 Key 已配置，若返回空则按 `### 3.9 MCP KEY 与配置` 流程重新配置。
+
+***
+
+## SSE error / apiKey 占位符泄漏
+
+mcporter 报 `SseError: SSE error: Invalid content type, expected "text/event-stream"` 时，最常见根因是把 OpenClaw 的哨兵值 `__OPENCLAW_REDACTED__` 当成真实 Key 拼进了 MCP URL。
+
+**症状**：
+
+- 拼出来的 URL 实际是 `https://mcp-dev.didichuxing.com/mcp-servers?key=__OPENCLAW_REDACTED__`
+- 服务端把它当成无效 Key 拒绝，返回 HTML / 纯文本错误页（不是 SSE 流）
+- mcporter 收到非 `text/event-stream` 响应直接抛 `SseError`
+
+**为什么会拼错**：误以为 `openclaw config get skills.entries.didi-ride-skill.apiKey` 配上 `--raw` / `awk` / `sed` 之类的手段能拿到真实 Key 字面量。实际上：
+
+> `openclaw config get`（含 `--raw`）**永远不会**返回真实 Key 字面量。`__OPENCLAW_REDACTED__` 是"已配置"的哨兵值，不是 Key 本身。真实 Key 由 OpenClaw 在每次 agent run 启动时注入到环境变量 `DIDI_MCP_KEY`，调用方只能通过 `$DIDI_MCP_KEY` 使用。
+
+**修复步骤**：
+
+1. 自检环境变量是否注入：
+
+   ```bash
+   printenv DIDI_MCP_KEY >/dev/null && echo env_ok || echo env_missing
+   ```
+
+2. 若 `env_ok`：把 URL 拼接改回 SKILL.md §3.2 第 4 条的固定写法，不要再尝试从 config 提取 Key：
+
+   ```bash
+   MCP_URL="https://mcp-dev.didichuxing.com/mcp-servers?key=$DIDI_MCP_KEY"
+   mcporter call "$MCP_URL" <tool> --args '...'
+   ```
+
+3. 若 `env_missing`：当前不在 openclaw agent run 上下文里（例如手动终端调用），按 SKILL.md §3.9 引导用户重新配置；或临时 `export DIDI_MCP_KEY=<key>` 后重试。
+
+**禁止**：
+
+- 禁止用 `openclaw config get ... --raw` / `awk` / `sed` / `jq` 等任何手段尝试从配置提取 Key 字面量
+- 禁止把 `__OPENCLAW_REDACTED__` 出现在任何 URL / header / 参数中
+- 禁止在见到本错误时向用户索要新的 Key——Key 可能完全有效，只是用错了
 
 ***
 
